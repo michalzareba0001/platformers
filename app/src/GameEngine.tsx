@@ -16,7 +16,7 @@ export default function GameEngineComponent() {
   }, []);
 
   const player = Matter.Bodies.rectangle(width / 4, height / 4, 50, 50);
-  const floor = Matter.Bodies.rectangle(width / 2, height - 25, width * 0.8, 50, { isStatic: true });
+  const floor = Matter.Bodies.rectangle(width / 2, height - 25, width, 50, { isStatic: true });
 
   Matter.World.add(world, [player, floor]);
 
