@@ -1,11 +1,10 @@
 import React from 'react';
-import { View } from 'react-native';
-import { Dimensions } from 'react-native';
+import { Dimensions, View } from 'react-native';
 
 export default function Floor({ body }: any) {
-  const width = Dimensions.get('window').width;
+  const { width } = Dimensions.get('window');
   const height = 25;
-  const x = 0;
+  const x = body.position.x - width / 2;
   const y = body.position.y - height / 2;
 
   return (
