@@ -13,9 +13,11 @@ const Physics = (entities: any, { time }: any) => {
 
   if (controls.left) {
     velocityX = -SPEED;
+    console.log('LEWO!');
   }
   if (controls.right) {
     velocityX = SPEED;
+    console.log('PRAWO!');
   }
 
   // Skok (jeśli jest "na ziemi")
@@ -41,7 +43,7 @@ const Physics = (entities: any, { time }: any) => {
 function isOnGround(player: Matter.Body, floor: Matter.Body) {
   const dist = Math.abs(player.position.y + 25 - (floor.position.y - 12.5));
   const vel = Math.abs(player.velocity.y);
-  console.log('isOnGround:', dist, vel);
+  // console.log('isOnGround:', dist, vel);
   return dist < 30 && vel < 1;
 }
 

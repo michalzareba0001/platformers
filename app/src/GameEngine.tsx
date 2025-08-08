@@ -1,6 +1,6 @@
 import Matter from 'matter-js';
 import React, { useEffect, useRef, useState } from 'react';
-import { Dimensions, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Dimensions, StyleSheet, Text, View } from 'react-native';
 import { GameEngine } from 'react-native-game-engine';
 import Floor from './entities/Floor';
 import Player from './entities/Player';
@@ -12,7 +12,9 @@ export default function GameEngineComponent() {
   const engine = useRef(Matter.Engine.create());
   const world = engine.current.world;
 
-  const [playerBody] = useState(() => Matter.Bodies.rectangle(100, 100, 50, 50));
+  const [playerBody] = useState(() =>
+    Matter.Bodies.rectangle(100, 100, 50, 50)
+  );
   const [floorBody] = useState(() =>
     Matter.Bodies.rectangle(width / 2, height - 25, width, 25, { isStatic: true })
   );
@@ -22,19 +24,48 @@ export default function GameEngineComponent() {
     Matter.Runner.run(Matter.Runner.create(), engine.current);
   }, [world, playerBody, floorBody]);
 
-  // Encje w useRef, controls jako obiekt w encji gracza
   const entities = useRef({
     physics: { engine: engine.current, world },
-    player: { body: playerBody, renderer: Player, controls: { left: false, right: false, jump: false } },
+    player: {
+      body: playerBody,
+      renderer: Player,
+      controls: { left: false, right: false, jump: false }
+    },
     floor: { body: floorBody, renderer: Floor },
   });
 
-  // Aktualizuj controls bezpośrednio w encji
-  const handleTouch = (type: 'left' | 'right' | 'jump', active: boolean) => {
-    entities.current.player.controls[type] = active;
+  // Rozmiar przycisków
+  const buttonSize = 70;
+  const btnLeft = { x: 30, y: height - 30 - buttonSize };
+  const btnRight = { x: 30 + buttonSize + 20, y: height - 30 - buttonSize };
+  const btnJump = { x: width - 30 - buttonSize, y: height - 30 - buttonSize };
+
+  const isInsideButton = (touchX: number, touchY: number, btn: { x: number, y: number }) => {
+    return (
+      touchX >= btn.x &&
+      touchX <= btn.x + buttonSize &&
+      touchY >= btn.y &&
+      touchY <= btn.y + buttonSize
+    );
   };
 
+  const updateControls = (evt: any) => {
+    const touches = evt.nativeEvent.touches;
+    let left = false, right = false, jump = false;
 
+    for (let t of touches) {
+      const x = t.pageX; // globalne X
+      const y = t.pageY; // globalne Y
+
+      if (isInsideButton(x, y, btnLeft)) left = true;
+      if (isInsideButton(x, y, btnRight)) right = true;
+      if (isInsideButton(x, y, btnJump)) jump = true;
+    }
+
+    entities.current.player.controls.left = left;
+    entities.current.player.controls.right = right;
+    entities.current.player.controls.jump = jump;
+  };
 
   return (
     <View style={{ flex: 1 }}>
@@ -43,32 +74,25 @@ export default function GameEngineComponent() {
         entities={entities.current}
         style={{ flex: 1, backgroundColor: '#add8e6' }}
       />
-      <View style={styles.controls}>
-        <View style={styles.directionButtons}>
-          <Pressable
-            onPressIn={() => handleTouch('left', true)}
-            onPressOut={() => handleTouch('left', false)}
-            style={styles.button}
-          >
-            <Text style={styles.text}>←</Text>
-          </Pressable>
-          <Pressable
-            onPressIn={() => handleTouch('right', true)}
-            onPressOut={() => handleTouch('right', false)}
-            style={styles.button}
-          >
-            <Text style={styles.text}>→</Text>
-          </Pressable>
 
-        </View>
-        <View style={styles.actionButtons}>
-          <Pressable
-            onPressIn={() => handleTouch('jump', true)}
-            onPressOut={() => handleTouch('jump', false)}
-            style={styles.button}
-          >
+      {/* Overlay multitouch */}
+      <View
+        style={StyleSheet.absoluteFill}
+        onTouchStart={updateControls}
+        onTouchMove={updateControls}
+        onTouchEnd={updateControls}
+      >
+        {/* Przyciski jako wizualizacja */}
+        <View style={styles.controls}>
+          <View style={[styles.button, { left: btnLeft.x, top: btnLeft.y }]}>
+            <Text style={styles.text}>←</Text>
+          </View>
+          <View style={[styles.button, { left: btnRight.x, top: btnRight.y }]}>
+            <Text style={styles.text}>→</Text>
+          </View>
+          <View style={[styles.button, { left: btnJump.x, top: btnJump.y }]}>
             <Text style={styles.text}>↑</Text>
-          </Pressable>
+          </View>
         </View>
       </View>
     </View>
@@ -78,33 +102,17 @@ export default function GameEngineComponent() {
 const styles = StyleSheet.create({
   controls: {
     position: 'absolute',
-    bottom: 30,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    columnGap: 20,
-    paddingHorizontal: 30,
+    width: '100%',
+    height: '100%',
   },
   button: {
+    position: 'absolute',
     backgroundColor: '#fff6',
     width: 70,
     height: 70,
     borderRadius: 35,
-    
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  directionButtons: {
-    flexDirection: 'row',
-    justifyContent: 'flex-start',
-    alignItems: 'center',
-    columnGap: 20,
-  },
-  actionButtons: {
-    flexDirection: 'row',
-    alignItems: 'center',
   },
   text: {
     fontSize: 28,
