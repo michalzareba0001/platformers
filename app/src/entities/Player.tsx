@@ -1,22 +1,29 @@
 import React from 'react';
 import { View } from 'react-native';
+import Matter from 'matter-js';
 
-export default function Player({ body }: any) {
+interface PlayerProps {
+  body: Matter.Body;
+  camera: { x: number; y: number };
+}
+
+const Player: React.FC<PlayerProps> = ({ body, camera }) => {
   const width = 50;
   const height = 50;
-  const x = body.position.x - width / 2;
-  const y = body.position.y - height / 2;
 
   return (
     <View
       style={{
         position: 'absolute',
-        left: x,
-        top: y,
+        left: body.position.x - width / 2 - camera.x,
+        top: body.position.y - height / 2 - camera.y,
         width,
         height,
-        backgroundColor: '#900',
+        backgroundColor: '#ff0000', // czerwony gracz
+        borderRadius: 50, // zaokrąglone rogi
       }}
     />
   );
-}
+};
+
+export default Player;
