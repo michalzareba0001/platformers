@@ -53,7 +53,7 @@ export default function GameEngineComponent() {
     plat(3300, 400, 100),
     plat(3000, 500, 200),
     plat(2700, 600, 80),
-    plat(3100, 750, 200),
+    plat(3000, 750, 200),
   ]);
 
   useEffect(() => {
@@ -73,9 +73,12 @@ export default function GameEngineComponent() {
       body: playerBody,
       renderer: Player,
       controls: { left: false, right: false, jump: false },
-      jumps: 1,
+      jumps: 2,
       maxJumps: 2,
-      camera: { x: 0, y: 0 }
+      jumpHeld: false,
+      jumpStartedAt: 0,
+      camera: { x: 0, y: 0 },
+      anim: { state: 'idle', frame: 0, facing: 1 as 1 | -1 }, // <—
     },
     floor: { body: floorBody, renderer: Floor, camera: { x: 0, y: 0 } },
     camera: { x: 0, y: 0 },

@@ -3,52 +3,149 @@ import Matter, { Engine, Events, IEventCollision } from 'matter-js';
 const SPEED = 4;
 const JUMP_FORCE = -10;
 
+const RUN_FPS = 12;
+const IDLE_FPS = 3;
+const JUMP_FPS = 6;
+
+const COYOTE_TIME = 100;         // ms po zejściu z krawędzi
+const JUMP_CUT_MULTIPLIER = 0.5; // skrócenie skoku po puszczeniu
+
+const WORLD_W = 4200;
+const WORLD_H = 4000;
+
+const ATTACHED_ENGINES = new WeakSet<Engine>();
+
+function isOnAnyPlatform(player: Matter.Body, entities: any) {
+  const halfH = (player.bounds.max.y - player.bounds.min.y) / 2;
+  const playerBottom = player.position.y + halfH;
+
+  const surfaces: Matter.Body[] = [
+    entities.floor?.body,
+    ...Object.keys(entities)
+      .filter((k) => k.startsWith('platform'))
+      .map((k) => entities[k].body),
+  ].filter(Boolean);
+
+  return surfaces.some((s: Matter.Body) => {
+    const sH = s.bounds.max.y - s.bounds.min.y;
+    const surfaceTop = s.position.y - sH / 2;
+
+    const overlapX = !(
+      player.bounds.max.x < s.bounds.min.x || player.bounds.min.x > s.bounds.max.x
+    );
+    const closeVertically = Math.abs(playerBottom - surfaceTop) < 30;
+    const smallVy = Math.abs(player.velocity.y) < 1;
+
+    return overlapX && closeVertically && smallVy;
+  });
+}
+
 const Physics = (entities: any, { time }: any) => {
   const engine: Engine = entities.physics.engine;
-  const player = entities.player.body;
-  const controls = entities.player.controls;
+  const playerEnt = entities.player;
+  const player = playerEnt.body;
+  const controls = playerEnt.controls;
 
-  let velocityX = 0;
-  let velocityY = player.velocity.y;
+  let vx = 0;
+  let vy = player.velocity.y;
 
-  if (controls.left) velocityX = -SPEED;
-  if (controls.right) velocityX = SPEED;
+  const now = Date.now();
 
-  if (controls.jump && entities.player.jumps > 0) {
-    velocityY = JUMP_FORCE;
-    entities.player.jumps--;
-    entities.player.controls.jump = false;
+  // Ruch poziomy
+  if (controls.left) vx = -SPEED;
+  if (controls.right) vx = SPEED;
+
+  // Czy stoimy na czymś?
+  const onGround = isOnAnyPlatform(player, entities);
+
+  // Coyote time
+  if (onGround) {
+    playerEnt.jumps = playerEnt.maxJumps;
+    playerEnt.lastGroundTime = now;
+  }
+  const canCoyoteJump = now - (playerEnt.lastGroundTime || 0) <= COYOTE_TIME && playerEnt.jumps > 0;
+
+  // --- Jump state tracking ---
+  if (playerEnt.jumpHeld === undefined) playerEnt.jumpHeld = false;
+  if (playerEnt.jumpStartedAt === undefined) playerEnt.jumpStartedAt = 0;
+  const wasHeld = playerEnt.jumpHeld;
+  playerEnt.jumpHeld = !!controls.jump;
+
+  // Skok (double + coyote) — tylko gdy przycisk właśnie wciśnięty
+  if (controls.jump && !wasHeld && (onGround || canCoyoteJump)) {
+    vy = JUMP_FORCE;
+    playerEnt.jumps -= 1;
+    playerEnt.jumpStartedAt = now;
   }
 
-  Matter.Body.setVelocity(player, { x: velocityX, y: velocityY });
+  // Jump-cut: tylko gdy puszczono przycisk po starcie skoku
+  const JUST_RELEASED = wasHeld && !playerEnt.jumpHeld;
+  const sinceStart = now - (playerEnt.jumpStartedAt || 0);
+  if (JUST_RELEASED && sinceStart > 60 && vy < 0) {
+    vy *= JUMP_CUT_MULTIPLIER;
+  }
 
-  Events.on(engine, 'collisionStart', (event: IEventCollision<Engine>) => {
-    event.pairs.forEach((pair) => {
-      if (pair.bodyA === player || pair.bodyB === player) {
-        const other = pair.bodyA === player ? pair.bodyB : pair.bodyA;
+  Matter.Body.setVelocity(player, { x: vx, y: vy });
 
-        // reset skoków po lądowaniu
-        if (other.isStatic) {
-          entities.player.jumps = entities.player.maxJumps;
-        }
+  // --- Animacja ---
+  let state: 'idle' | 'run' | 'jump' = 'idle';
+  if (!onGround) state = 'jump';
+  else if (Math.abs(player.velocity.x) > 0.1) state = 'run';
 
-        // dotknięcie podłogi = reset pozycji
+  if (controls.left)  playerEnt.anim.facing = -1;
+  if (controls.right) playerEnt.anim.facing =  1;
+
+  playerEnt.anim._acc = (playerEnt.anim._acc || 0) + time.delta;
+  const frameDur =
+    state === 'run'  ? 1000 / RUN_FPS :
+    state === 'idle' ? 1000 / IDLE_FPS :
+                       1000 / JUMP_FPS;
+
+  if (playerEnt.anim.state !== state) {
+    playerEnt.anim.state = state;
+    playerEnt.anim.frame = 0;
+    playerEnt.anim._acc = 0;
+  } else {
+    while (playerEnt.anim._acc >= frameDur) {
+      playerEnt.anim._acc -= frameDur;
+      playerEnt.anim.frame += 1;
+    }
+  }
+
+  // Listener kolizji — tylko raz
+  if (!ATTACHED_ENGINES.has(engine)) {
+    Events.on(engine, 'collisionStart', (event: IEventCollision<Engine>) => {
+      for (const pair of event.pairs) {
+        const a = pair.bodyA;
+        const b = pair.bodyB;
+
+        if (a !== player && b !== player) continue;
+        const other = a === player ? b : a;
+
         if (other === entities.floor.body) {
-          Matter.Body.setPosition(player, { x: 500, y: 4000 - 150 - 50 });
-          Matter.Body.setVelocity(player, { x: 0, y: 0 });
-          entities.player.jumps = entities.player.maxJumps;
+          const floorTop = other.position.y - (other.bounds.max.y - other.bounds.min.y) / 2;
+          const playerBottom = player.position.y + (player.bounds.max.y - player.bounds.min.y) / 2;
+          const fromAbove = playerBottom <= floorTop + 5 || player.velocity.y >= 0;
+
+          if (fromAbove) {
+            Matter.Body.setPosition(player, { x: 500, y: WORLD_H - 150 - 50 });
+            Matter.Body.setVelocity(player, { x: 0, y: 0 });
+            playerEnt.jumps = playerEnt.maxJumps;
+            playerEnt.lastGroundTime = Date.now();
+          }
         }
       }
     });
-  });
+    ATTACHED_ENGINES.add(engine);
+  }
 
-  // Kamera śledzi gracza
+  // Kamera
   const camX = player.position.x - entities.screenWidth / 2;
   const camY = player.position.y - entities.screenHeight / 2;
-  entities.camera.x = Math.max(0, Math.min(camX, 4200 - entities.screenWidth));
-  entities.camera.y = Math.max(0, Math.min(camY, 4000 - entities.screenHeight));
+  entities.camera.x = Math.max(0, Math.min(camX, WORLD_W - entities.screenWidth));
+  entities.camera.y = Math.max(0, Math.min(camY, WORLD_H - entities.screenHeight));
 
-  // aktualizacja kamer w entity
+  // Aktualizacja offsetu kamery w encjach
   Object.values(entities).forEach((ent: any) => {
     if (ent && ent.camera) {
       ent.camera.x = entities.camera.x;
