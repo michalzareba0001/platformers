@@ -5,6 +5,8 @@ import { GameEngine } from 'react-native-game-engine';
 import Floor from './entities/Floor';
 import Player from './entities/Player';
 import Platform from './entities/Platform';
+import Lava from './entities/Lava';
+import EndGame from './entities/EndGame';
 import Physics from './Physics';
 import Background01 from './components/Background01';
 
@@ -50,14 +52,26 @@ export default function GameEngineComponent() {
     plat(2600, 300, 200),
     plat(2800, 150, 150),
     plat(3050, 250, 200),
-    plat(3300, 400, 100),
+    plat(3300, 380, 100),
     plat(3000, 500, 200),
     plat(2700, 600, 80),
-    plat(3000, 750, 200),
+    plat(3000, 720, 200),
   ]);
 
+  // --- LAVA: kilka „platform” lawy ---
+  const [lava] = useState(() => [
+    plat(960, 220, 100, 40),
+    plat(3200, 720, 100, 40),
+  ]);
+
+  // --- END LEVEL: jedna „platforma” kończąca poziom ---
+  const [endLevel] = useState(() =>
+    plat(3420, 650, 150, 57)
+  );
+
   useEffect(() => {
-    Matter.World.add(world, [playerBody, floorBody, ...platforms]);
+    // dodajemy WSZYSTKO do świata (dopisana lava i endLevel)
+    Matter.World.add(world, [playerBody, floorBody, ...platforms, ...lava, endLevel]);
     Matter.Runner.run(Matter.Runner.create(), engine.current);
   }, []);
 
@@ -78,16 +92,27 @@ export default function GameEngineComponent() {
       jumpHeld: false,
       jumpStartedAt: 0,
       camera: { x: 0, y: 0 },
-      anim: { state: 'idle', frame: 0, facing: 1 as 1 | -1 }, // <—
+      anim: { state: 'idle', frame: 0, facing: 1 as 1 | -1 },
     },
     floor: { body: floorBody, renderer: Floor, camera: { x: 0, y: 0 } },
     camera: { x: 0, y: 0 },
     screenWidth: SCREEN_W,
     screenHeight: SCREEN_H,
+
+    // zwykłe platformy
     ...platforms.reduce((acc, p, i) => {
       acc[`platform${i + 1}`] = { body: p, renderer: Platform, camera: { x: 0, y: 0 } };
       return acc;
-    }, {} as any)
+    }, {} as any),
+
+    // LAVA – renderowana komponentem Lava
+    ...lava.reduce((acc, p, i) => {
+      acc[`lava${i + 1}`] = { body: p, renderer: Lava, camera: { x: 0, y: 0 } };
+      return acc;
+    }, {} as any),
+
+    // END LEVEL – renderowany komponentem EndGame
+    endLevel: { body: endLevel, renderer: EndGame, camera: { x: 0, y: 0 } },
   });
 
   const buttonSize = 70;

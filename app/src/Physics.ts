@@ -40,6 +40,14 @@ function isOnAnyPlatform(player: Matter.Body, entities: any) {
   });
 }
 
+// --- NEW: zbiera ciała lavy z entities (lava1, lava2, ...)
+function getLavaBodies(entities: any): Matter.Body[] {
+  return Object.keys(entities)
+    .filter((k) => k.startsWith('lava'))
+    .map((k) => entities[k]?.body as Matter.Body)
+    .filter(Boolean);
+}
+
 const Physics = (entities: any, { time }: any) => {
   const engine: Engine = entities.physics.engine;
   const playerEnt = entities.player;
@@ -115,6 +123,8 @@ const Physics = (entities: any, { time }: any) => {
   // Listener kolizji — tylko raz
   if (!ATTACHED_ENGINES.has(engine)) {
     Events.on(engine, 'collisionStart', (event: IEventCollision<Engine>) => {
+      const lavaBodies = getLavaBodies(entities); // <— NEW
+
       for (const pair of event.pairs) {
         const a = pair.bodyA;
         const b = pair.bodyB;
@@ -122,12 +132,14 @@ const Physics = (entities: any, { time }: any) => {
         if (a !== player && b !== player) continue;
         const other = a === player ? b : a;
 
-        if (other === entities.floor.body) {
+        // --- ŚMIERĆ: Floor LUB Lava ---
+        if (other === entities.floor.body || lavaBodies.includes(other)) {
           const floorTop = other.position.y - (other.bounds.max.y - other.bounds.min.y) / 2;
           const playerBottom = player.position.y + (player.bounds.max.y - player.bounds.min.y) / 2;
           const fromAbove = playerBottom <= floorTop + 5 || player.velocity.y >= 0;
 
           if (fromAbove) {
+            // respawn jak dotąd
             Matter.Body.setPosition(player, { x: 500, y: WORLD_H - 150 - 50 });
             Matter.Body.setVelocity(player, { x: 0, y: 0 });
             playerEnt.jumps = playerEnt.maxJumps;
